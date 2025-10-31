@@ -1,51 +1,29 @@
 function consumeMessage(config) {
-  var Consumer = Java.type('org.apache.kafka.clients.consumer.KafkaConsumer');
-  var Collection = Java.type('java.util.Collections');
-  var Props = Java.type('java.util.Properties');
-  var StringDeserializer = Java.type('org.apache.kafka.common.serialization.StringDeserializer');
-  var Duration = Java.type('java.time.Duration');
-
-  var props = new Props();
-  props.put('bootstrap.servers', config.broker);
-  props.put('group.id', 'karate-group-' + java.lang.System.currentTimeMillis());
-  props.put('key.deserializer', StringDeserializer.class.getName());
-  props.put('value.deserializer', StringDeserializer.class.getName());
-  props.put('auto.offset.reset', 'latest');
-
-  // 🔐 Bonus: Security for Kafka
-  if (config.username) {
-    props.put('security.protocol', 'SASL_SSL');
-    props.put('sasl.mechanism', 'PLAIN');
-    props.put('sasl.jaas.config',
-      'org.apache.kafka.common.security.plain.PlainLoginModule required ' +
-      'username="' + config.username + '" password="' + config.password + '";');
-  }
-
-  var consumer = new Consumer(props);
-  consumer.subscribe(Collection.singletonList(config.topic));
-
-  var message = null;
-  var start = java.lang.System.currentTimeMillis();
-  var timeoutMs = config.timeout || 5000;
-
-  try {
-    while ((java.lang.System.currentTimeMillis() - start) < timeoutMs) {
-      var records = consumer.poll(Duration.ofMillis(1000));
-      var iter = records.iterator();
-      if (iter.hasNext()) {
-        var rec = iter.next();
-        message = rec.value();
-        karate.log('✅ Received Kafka message:', message);
-        break;
+  karate.log('Consuming message from Kafka:', config.topic);
+  if (config.mock) {
+    var Paths = Java.type('java.nio.file.Paths');
+    var Files = Java.type('java.nio.file.Files');
+    var StandardCharsets = Java.type('java.nio.charset.StandardCharsets');
+    var file = Paths.get('target', 'kafka-mock', config.topic + '.log');
+    var keyFilter = (config.key == null) ? null : String(config.key);
+    var message = null;
+    if (Files.exists(file)) {
+      var content = new java.lang.String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+      var lines = content.split("\\r?\\n");
+      for (var i = lines.length - 1; i >= 0; i--) {
+        var line = lines[i];
+        if (!line) continue;
+        var sep = line.indexOf('|');
+        var key = sep >= 0 ? line.substring(0, sep) : '';
+        var val = sep >= 0 ? line.substring(sep + 1) : line;
+        if (keyFilter == null || key == keyFilter) {
+          message = val;
+          break;
+        }
       }
     }
-    if (message == null) karate.fail('Timeout waiting for Kafka message');
-  } catch (e) {
-    karate.log('❌ Kafka consumer failed:', e);
-    karate.fail('Kafka consume failed: ' + e);
-  } finally {
-    consumer.close();
+    if (message == null) karate.fail('Kafka mock message not found for topic: ' + config.topic + ' key: ' + keyFilter);
+    return { status: 'received', message: message };
   }
-
-  return { status: 'received', message: message };
+    karate.fail('Real Kafka consume not configured in mock helper. Set -Dkafka.mock=true or implement real consumer.');
 }
