@@ -1,16 +1,17 @@
-Feature: Todo Management with Environment-Specific Configuration
+Feature: Todo Management with Environment-Specific Configuration and Kafka Integration
 
   Background: Acceptance Criteria: The base URL must be loaded dynamically from the environment configuration.
+    # The config.baseUrl is returned by the karate-config.js based on the -Dkarate.env argument.
     * url baseUrl
+    * def givenENV = karate.env
 
   Scenario: Acceptance Criteria: A complete lifecycle of a ToDo item (Create, Retrieve, List, Create Second, List All),
-    must execute successfully, verifying the correct data at each step.
-    
-    
-  # --- ACTION 1: Create the First Todo Item ---
-  # Acceptance Criteria: Creating a new todo must return a 201 status and the new item with an assigned id.
+    must execute successfully, and verify Kafka message is produced.
+    * print 'Running tests against environment: ', givenENV
 
-    #Given the endpoint for creating new todos is targeted
+  # --- ACTION 1: Acceptance Criteria: Creating a new todo must return a 201 status and the new item with an assigned id ---
+  
+    # Given the environment is set to "Dev/Stage/Perf/Mtf" (Implied by the config file based on runtime argument)
     Given path 'todos'
     #And I provide a new todo item with title 'First' and completion status false
     And request { title: 'First', complete: false }
@@ -21,7 +22,6 @@ Feature: Todo Management with Environment-Specific Configuration
     #And the response should confirm the details:
     And match response == { id: '#number', title: 'First', complete: false }
     * def firstId = response.id-1
-
 
   # --- ACTION 2: Retrieve the Newly Created Todo by ID ---
   # Acceptance Criteria: Retrieving the item using the calculated ID (firstId) must return a 200 status
